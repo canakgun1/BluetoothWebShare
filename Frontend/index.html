@@ -9,8 +9,10 @@
     <button onclick=başlat() id="başlatbutton">Bağlantıyı başlat</button>
     <button id = "katılbutton">Bağlantıya katıl</button>
     <textarea id="yazigirarea" placeholder="Yollanacak yazı"></textarea>
-    <button id = "gönderbutton">Gönder</button>
+    <button onclick=gönder() id="gönderbutton">Gönder</button>
     <h1 id="yazigelecektext">Yazı buraya gelecek</h1>
+    <input type="file" id="dosya">
+    <img id="resim">
   
   <script>
 
@@ -23,11 +25,9 @@
       console.log("Socketa bağlandık.");
       
     };
-    socket.onmessage = async (event) => {
-      const data = await event.data.text();
-      const message = JSON.parse(data);
-      document.getElementById("yazigelecektext").textContent = message.type;
-    };
+
+    
+    
 
     const peerConnection = new RTCPeerConnection({
       iceServers: [
@@ -36,9 +36,89 @@
         }
       ]
     });
+
+    const dataChannel = peerConnection.createDataChannel("messages");
+
+    peerConnection.ondatachannel = (event) => {
+      const dataChannel = event.channel;
+      console.log("Data channel var");
+      dataChannel.onopen = () => {
+        console.log("Data channel açıldı");
+      };
+      let fileInfo;
+      let parçalar = [];
+      let gelenSize = 0;
+      dataChannel.onmessage = (event) => {
+        if (typeof event.data === "string") {
+          const message = JSON.parse(event.data);
+
+          if (message.type === "file-info") {
+            fileInfo = message;
+            parçalar = [];
+            gelenSize = 0;
+
+            console.log("Gelecek dosya:", fileInfo.name);
+          }
+          return;
+        }
+        parçalar.push(event.data);
+        gelenSize += event.data.byteLength;
+        if (gelenSize === fileInfo.size) {
+          const blob = new Blob(parçalar, {
+            type: "image/png"
+          });
+          const url = URL.createObjectURL(blob);
+          document.getElementById("resim").src = url;
+        }
+        
+      }
+    };
+
+    dataChannel.onopen = () => {
+      console.log("Data channel ikisinde de açıldı.");
+    }
+
+
     peerConnection.onconnectionstatechange = () => {
       console.log("Yeni WEBRTC state:", peerConnection.connectionState);
     }
+
+    peerConnection.onicecandidate = (event) => {
+      console.log("ICE event:", event.candidate);
+      if (event.candidate) {
+        socket.send(JSON.stringify({
+          type: "ice",
+          data: event.candidate
+        }));
+      }
+    }
+
+    console.log("ICE gathering state:", peerConnection.iceGatheringState);
+    peerConnection.onicegatheringstatechange = () => {
+      console.log("ICE gathering:", peerConnection.iceGatheringState);
+    };
+
+    socket.onmessage = async (event) => {
+      const data = await event.data.text();
+      const message = JSON.parse(data);
+      document.getElementById("yazigelecektext").textContent = message.type;
+      if (message.type === "offer") {
+        await peerConnection.setRemoteDescription(message.data);
+        const answer = await peerConnection.createAnswer();
+        await peerConnection.setLocalDescription(answer);
+
+        socket.send(JSON.stringify({
+          type:"answer",
+          data:peerConnection.localDescription
+        }));
+      }
+      if (message.type === "answer") {
+        await peerConnection.setRemoteDescription(message.data);
+      }
+      if (message.type === "ice") {
+        await peerConnection.addIceCandidate(message.data);
+      }
+    };
 
     async function başlat() {
       const offer = await peerConnection.createOffer();
@@ -50,6 +130,37 @@
         data: peerConnection.localDescription
       }));
     };
+
+    async function gönder() {
+      const yazi = document.getElementById("yazigirarea").value;
+      dataChannel.send(yazi);
+    };
+
+    document.getElementById("dosya").onchange = async (event) => {
+      const dosya = event.target.files[0];
+      if (!dosya) {
+        return;
+      }
+      console.log("Dosya gidiyor", dosya.name);
+      
+
+      dataChannel.send(JSON.stringify({
+        type: "file-info",
+        name: dosya.name,
+        size: dosya.size,
+        mimeType: dosya.type
+      }));
+
+      const data = await dosya.arrayBuffer();
+      const parça = 16 * 1024;
+
+      for (let i = 0; i < data.byteLength; i+= parça) {
+        const buParça = data.slice(i, i + parça);
+        dataChannel.send(buParça);
+      }
+      
+    };
+
   </script>
 </body>
 </html>
