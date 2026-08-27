@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Can File Sharing</title>
+  <link href="style.css" rel="stylesheet" />
+</head>
+<body>
+    <button onclick=başlat() id="başlatbutton">Bağlantıyı başlat</button>
+    <button id = "katılbutton">Bağlantıya katıl</button>
+    <textarea id="yazigirarea" placeholder="Yollanacak yazı"></textarea>
+    <button id = "gönderbutton">Gönder</button>
+    <h1 id="yazigelecektext">Yazı buraya gelecek</h1>
+  
+  <script>
+
+    
+    console.log("App started");
+
+    const socket = new WebSocket("ws://localhost:8080");
+
+    socket.onopen = () => {
+      console.log("Socketa bağlandık.");
+      
+    };
+    socket.onmessage = async (event) => {
+      const data = await event.data.text();
+      const message = JSON.parse(data);
+      document.getElementById("yazigelecektext").textContent = message.type;
+    };
+
+    const peerConnection = new RTCPeerConnection({
+      iceServers: [
+        {
+          urls: "stun:stun.l.google.com:19302"
+        }
+      ]
+    });
+    peerConnection.onconnectionstatechange = () => {
+      console.log("Yeni WEBRTC state:", peerConnection.connectionState);
+    }
+
+    async function başlat() {
+      const offer = await peerConnection.createOffer();
+
+      await peerConnection.setLocalDescription(offer);
+
+      socket.send(JSON.stringify({
+        type: "offer",
+        data: peerConnection.localDescription
+      }));
+    };
+  </script>
+</body>
+</html>
