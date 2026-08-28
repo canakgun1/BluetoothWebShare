@@ -7,19 +7,14 @@
 </head>
 <body>
     <button onclick=başlat() id="başlatbutton">Bağlantıyı başlat</button>
-    <button id = "katılbutton">Bağlantıya katıl</button>
-    <textarea id="yazigirarea" placeholder="Yollanacak yazı"></textarea>
-    <button onclick=gönder() id="gönderbutton">Gönder</button>
-    <h1 id="yazigelecektext">Yazı buraya gelecek</h1>
+
     <input type="file" id="dosya">
     <img id="resim">
   
   <script>
 
-    
-    console.log("App started");
 
-    const socket = new WebSocket("ws://localhost:8080");
+    const socket = new WebSocket("wss://mail1.cakgun.com/ws");
 
     socket.onopen = () => {
       console.log("Socketa bağlandık.");
@@ -27,8 +22,6 @@
     };
 
     
-    
-
     const peerConnection = new RTCPeerConnection({
       iceServers: [
         {
@@ -65,13 +58,29 @@
         gelenSize += event.data.byteLength;
         if (gelenSize === fileInfo.size) {
           const blob = new Blob(parçalar, {
-            type: "image/png"
+            type: fileInfo.mimeType
           });
           const url = URL.createObjectURL(blob);
-          document.getElementById("resim").src = url;
+          const resim = document.getElementById("resim");
+          resim.src = url;
+
+          
         }
         
       }
+    };
+
+    document.getElementById("resim").onload = () => {
+          const scale = Math.min(
+            window.innerWidth / resim.naturalWidth,
+            window.innerHeight / resim.naturalHeight,
+            1
+        );
+        
+
+        resim.style.width = `${resim.naturalWidth * scale}px`;
+        resim.style.height = `${resim.naturalHeight * scale}px`;
+        
     };
 
     dataChannel.onopen = () => {
@@ -101,7 +110,7 @@
     socket.onmessage = async (event) => {
       const data = await event.data.text();
       const message = JSON.parse(data);
-      document.getElementById("yazigelecektext").textContent = message.type;
+
       if (message.type === "offer") {
         await peerConnection.setRemoteDescription(message.data);
         const answer = await peerConnection.createAnswer();
@@ -131,10 +140,6 @@
       }));
     };
 
-    async function gönder() {
-      const yazi = document.getElementById("yazigirarea").value;
-      dataChannel.send(yazi);
-    };
 
     document.getElementById("dosya").onchange = async (event) => {
       const dosya = event.target.files[0];
