@@ -9,8 +9,10 @@
     <button onclick=başlat() id="başlatbutton">Bağlantıyı başlat</button>
     <h1 id="status">Bekliyor</h1>
 
-    <input type="file" id="dosya">
-    <img id="resim">
+    <input type="text" id="yaz">
+
+    <button id="gönder">Gönder</button>
+    <h3 id="gelenmesaj"></h3>
     
   
   <script>
@@ -47,43 +49,17 @@
         if (typeof event.data === "string") {
           const message = JSON.parse(event.data);
 
-          if (message.type === "file-info") {
-            fileInfo = message;
-            parçalar = [];
-            gelenSize = 0;
-
-            console.log("Gelecek dosya:", fileInfo.name);
+          if (message.type === "text") {
+            console.log("Gelen yazı:", message.text);
+            document.getElementById("gelenmesaj").innerText = message.text;
           }
           return;
         }
-        parçalar.push(event.data);
-        gelenSize += event.data.byteLength;
-        if (gelenSize === fileInfo.size) {
-          const blob = new Blob(parçalar, {
-            type: fileInfo.mimeType
-          });
-          const url = URL.createObjectURL(blob);
-          const resim = document.getElementById("resim");
-          resim.src = url;
-
-          
-        }
+        
         
       }
     };
 
-    document.getElementById("resim").onload = () => {
-          const scale = Math.min(
-            window.innerWidth / resim.naturalWidth,
-            window.innerHeight / resim.naturalHeight,
-            1
-        );
-        
-
-        resim.style.width = `${resim.naturalWidth * scale}px`;
-        resim.style.height = `${resim.naturalHeight * scale}px`;
-        
-    };
 
     dataChannel.onopen = () => {
       document.getElementById("status").innerText = "Bağlandı OK";
@@ -144,28 +120,18 @@
     };
 
 
-    document.getElementById("dosya").onchange = async (event) => {
-      const dosya = event.target.files[0];
-      if (!dosya) {
+    document.getElementById("gönder").onclick = async (event) => {
+      const yazı = document.getElementById("yaz").value;
+      if (!yazı) {
         return;
       }
-      console.log("Dosya gidiyor", dosya.name);
+      console.log("Yazı gidiyor", yazı);
       
 
       dataChannel.send(JSON.stringify({
-        type: "file-info",
-        name: dosya.name,
-        size: dosya.size,
-        mimeType: dosya.type
+        type: "text",
+        text: yazı
       }));
-
-      const data = await dosya.arrayBuffer();
-      const parça = 16 * 1024;
-
-      for (let i = 0; i < data.byteLength; i+= parça) {
-        const buParça = data.slice(i, i + parça);
-        dataChannel.send(buParça);
-      }
       
     };
 
